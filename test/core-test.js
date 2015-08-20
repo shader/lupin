@@ -3,15 +3,13 @@ import stream from 'most'
 import rewire from 'rewire'
 import Lux from '../src/lux'
 import bus from '../src/bus'
-core = rewire('../src/main')
+core = rewire('../src/lux')
 
 describe('Lux', function() {
   it('should be able to register applicatives', function() {
     let c = new Lux({a:1}),
         f = function (state, action) { return {state} }
-    c.register(f)
-    expect(c).property('applicatives').to.have.length(1)
-      .and.to.contain(f)
+    expect(() => c.register(f)).to.increase(c.applicatives, 'length')
   })
 
   it('should be able to process actions', function(done) {

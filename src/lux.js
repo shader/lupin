@@ -20,36 +20,16 @@ function collect(acc, more) {
 
 function processAction(applicatives) {
   return function({state}, action) {
-    let c = 0
-    let res = applicatives.reduce(
+    let reduction = applicatives.reduce(
       (acc, app) => {
         let {state, effects} = app(acc.state, action),
             res = {
               state,
               effects: collect(acc.effects, effects)
             }
-        //console.log(c++ + ' ' + JSON.stringify(acc))
         return res
       }, {state})
-    return res
-  }
-}
-
-/*
-for functions of the form (state, action, cb) => cb(state, effects)
-*/
-function act(apps) {
-  return function (state, action) {
-    function outer(rest) {
-      if (rest) {
-        return function inner(state, effects) {
-          return rest[0](state, action, outer(rest.slice(1)))
-        }
-      } else {
-        return
-      }
-    }
-    return outer(apps)(state)
+    return reduction
   }
 }
 
@@ -61,21 +41,24 @@ function processEffect(effect, effectors) {
     .await()
 }
 
-export class Lux {
+function loader(state, action) {
+  if (action.type == 'lux.load') {
+    return {state: action.state}
+  }
+  return {state}
+}
+
+class Lux {
   constructor(initialState) {
-    this.applicatives = []
+    this.applicatives = [loader]
     this.effectors = []
-    this._init = bus()
     this.actions = bus()
 
-    let merged = stream.just(initialState)
-        .merge(this._init)
-        .map(s => this.actions.scan(processAction(this.applicatives),
-                                    {state: s}))
-        .switch(),
+    let merged = this.actions.scan(processAction(this.applicatives),
+                                   {state: initialState}),
         s = split(merged, ['state', 'effects'])
 
-    this.state = merged.map(o => o.state)
+    this.state = s.state
     this.effects = s.effects
       .filter(e => e !== undefined)
       .chain(l => stream.from(l))
@@ -91,8 +74,9 @@ export class Lux {
   }
 
   load(state) {
-    this._init.push(state)
+    this.actions.push({type: 'lux.load', state})
   }
 }
 
 export default Lux
+export {Lux, stream}
