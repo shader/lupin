@@ -1,0 +1,65 @@
+{
+  "name": "lux",
+  "version": "0.0.0",
+  "description": "The light flux framework",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github "
+  },
+  "jspm": {
+    "directories": {
+      "packages": "jspm"
+    },
+    "dependencies": {
+      "immutable": "npm:immutable@^3.7.4",
+      "lodash/lodash": "github:lodash/lodash@^3.10.1",
+      "most": "github:cujojs/most@^0.15.0"
+    },
+    "devDependencies": {
+      "babel": "npm:babel-core@^5.1.13",
+      "babel-runtime": "npm:babel-runtime@^5.1.13",
+      "core-js": "npm:core-js@^0.9.4"
+    }
+  },
+  "devDependencies": {
+    "babel": "^5.8.21",
+    "babel-eslint": "*",
+    "babel-runtime": "^5.8.20",
+    "chai": "^3.2.0",
+    "del": "*",
+    "event-stream": "^3.3.1",
+    "gulp": "*",
+    "gulp-autoprefixer": "*",
+    "gulp-babel": "*",
+    "gulp-changed": "*",
+    "gulp-connect": "^2.2.0",
+    "gulp-if": "*",
+    "gulp-inject-reload": "*",
+    "gulp-jade": "*",
+    "gulp-livereload": "*",
+    "gulp-load-plugins": "*",
+    "gulp-minify-css": "*",
+    "gulp-minify-html": "*",
+    "gulp-plumber": "^1.0.1",
+    "gulp-rename": "*",
+    "gulp-riot": "*",
+    "gulp-sourcemaps": "*",
+    "gulp-standard": "^5.1.0",
+    "gulp-stylus": "*",
+    "gulp-uglify": "*",
+    "jspm": "^0.15.7",
+    "mocha": "^2.2.5",
+    "mocha-babel": "^3.0.0",
+    "most-bus": "0.0.3",
+    "nib": "*",
+    "rewire": "^2.3.4"
+  },
+  "scripts": {
+    "prepublish": "node_modules/gulp/bin/gulp.js; node_modules/jspm/jspm.js install",
+    "test": "$(npm bin)/mocha"
+  },
+  "standard": {
+    "parser": "babel-eslint"
+  }
+}
