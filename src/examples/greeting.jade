@@ -1,0 +1,15 @@
+doctype html
+html(lang="en")
+  head
+    title Lux example
+    //script(src='bundle.js')
+    script(src="/jspm/system.js")
+    script(src="/config.js")
+    script.
+      System.config({baseURL: "/"})
+      System.import('greeting')
+  body
+    nav
+      a(href='/') Home
+    input#source(placeholder=Name)
+    #sink
