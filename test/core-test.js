@@ -8,14 +8,14 @@ core = rewire('../src/lux')
 describe('Lux', function() {
   it('should be able to register processors', function() {
     let c = new Lux({a:1}),
-        f = function (state, action) { return [state] }
+        f = function (state, signal) { return [state] }
     expect(() => c.register(f)).to.increase(c.processors, 'length')
   })
 
-  it('should be able to process actions', function(done) {
+  it('should be able to process signals', function(done) {
     let c = new Lux({a: 1}),
-        f = function (state, action) {
-          return [{a: action.a}]
+        f = function (state, signal) {
+          return [{a: signal.a}]
         }
     c.register(f)
     c.state.slice(1,2).observe((o) => {
@@ -24,21 +24,21 @@ describe('Lux', function() {
       .then(() => done())
       .catch(e => done(e))
 
-    c.actions.push({a: 2})
+    c.signals.push({a: 2})
   })
 
   it('should be able to handle side-effects', function(done) {
     let c = new Lux({}), 
-        f = function(state, action) {
-          if (action.type == 'run')
-            return [state, ['ran ' + action.val]]
-          else return ['action: ' + action]
+        f = function(state, signal) {
+          if (signal.type == 'run')
+            return [state, ['ran ' + signal.val]]
+          else return ['signal: ' + signal]
         }
     c.register(f)
     c.effectors.unshift((e) => [e])
-    c.actions.push({type:'run', val: 'test'})
+    c.signals.push({type:'run', val: 'test'})
     c.state.slice(2,3).observe(o => {
-      expect(o).to.equal('action: ran test')
+      expect(o).to.equal('signal: ran test')
     })
       .then(() => done())
       .catch(e => done(e))
@@ -56,13 +56,14 @@ describe('Lux', function() {
       })
       .catch(e => done(e))
         
-    setTimeout(() => c.actions.push(1), 5)
+    setTimeout(() => c.signals.push(1), 5)
     setTimeout(() => c.load(2), 10)
-    setTimeout(() => c.actions.push(1), 15)
+    setTimeout(() => c.signals.push(1), 15)
   })
 
-  it('can record actions')
-  it('can replay actions')
+  it('can record signals')
+  it('can replay signals')
+  it('should keep a short log of state history')
   it('can travel back in time')
   it('can travel forward in time')
 })
@@ -85,16 +86,16 @@ describe('switch', function() {
   })
 })
 
-describe('processAction', function() {
-  it('should reduce (state, action) -> {state, effects}', function() {
-    let r = core.__get__('processAction')([
-      (state, action) => ([state, [action]]),
-      (state, action) => ([{action}, [action[0]]])
+describe('processSignal', function() {
+  it('should reduce (state, signal) -> {state, effects}', function() {
+    let r = core.__get__('processSignal')([
+      (state, signal) => ([state, [signal]]),
+      (state, signal) => ([{signal}, [signal[0]]])
     ]),
         state = {b:1},
-        action = 'test',
-        [s, e] = r([state], action)
-    expect(s).to.have.property('action').that.equals('test')
+        signal = 'test',
+        [s, e] = r([state], signal)
+    expect(s).to.have.property('signal').that.equals('test')
     expect(e).to.eql(['test', 't'])
   })
 })
@@ -102,7 +103,7 @@ describe('processAction', function() {
 describe('processEffect', function() {
   let processEffect = core.__get__('processEffect')
 
-  it('should convert an effect to actions', function(done) {
+  it('should convert an effect to signals', function(done) {
     let effect = 'one',
         effectors = [(e) => [e.length],
                      (e) => [e]]

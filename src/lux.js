@@ -4,13 +4,13 @@ import split from './split'
 
 /*
 Core:
-  action-bus: pluggable stream of actions / events
+  signal-stream: pluggable stream of signals
   side-stream: stream of side-effects
 
-Processor: (state, action) -> [state, effects]
-Actor: () -> actions
-Detector: event -> actions
-Effector: effect -> [Promise(action)]
+Processor: (state, signal) -> [state, effects]
+Signal(er?): () -> signal
+Detector: event -> signals
+Effector: effect -> [Promise(signal)]
 Renderer: state -> view
 */
 
@@ -18,11 +18,11 @@ function collect(acc, more) {
   return more ? (acc || []).concat(more) : acc
 }
 
-function processAction(processors) {
-  return function([state], action) {
+function processSignal(processors) {
+  return function([state], signal) {
     let reduction = processors.reduce(
       ([state, effects], app) => {
-        let [s, e] = app(state, action),
+        let [s, e] = app(state, signal),
             res = [ s, collect(effects, e) ]
         return res
       }, [state])
@@ -38,9 +38,9 @@ function processEffect(effect, effectors) {
     .await()
 }
 
-function loader(state, action) {
-  if (action.type == 'lux.load') {
-    return [action.state]
+function loader(state, signal) {
+  if (signal.type == 'lux.load') {
+    return [signal.state]
   }
   return [state]
 }
@@ -49,9 +49,9 @@ class Lux {
   constructor(initialState) {
     this.processors = [loader]
     this.effectors = []
-    this.actions = bus()
+    this.signals = bus()
 
-    let merged = this.actions.scan(processAction(this.processors),
+    let merged = this.signals.scan(processSignal(this.processors),
                                    [initialState]),
         [state, effects] = split(merged)
 
@@ -63,7 +63,7 @@ class Lux {
     
     let processedEffects = this.effects
         .chain(e => processEffect(e, this.effectors))
-    this.actions.plug(processedEffects)
+    this.signals.plug(processedEffects)
   }
 
   register(app) {
@@ -71,7 +71,7 @@ class Lux {
   }
 
   load(state) {
-    this.actions.push({type: 'lux.load', state})
+    this.signals.push({type: 'lux.load', state})
   }
 }
 
