@@ -7,7 +7,7 @@ Core:
   action-bus: pluggable stream of actions / events
   side-stream: stream of side-effects
 
-Applicative: (state, action) -> {state, effects}
+Processor: (state, action) -> {state, effects}
 Actor: () -> actions
 Detector: event -> actions
 Effector: effect -> [Promise(action)]
@@ -18,9 +18,9 @@ function collect(acc, more) {
   return more ? (acc || []).concat(more) : acc
 }
 
-function processAction(applicatives) {
+function processAction(processors) {
   return function({state}, action) {
-    let reduction = applicatives.reduce(
+    let reduction = processors.reduce(
       (acc, app) => {
         let {state, effects} = app(acc.state, action),
             res = {
@@ -50,11 +50,11 @@ function loader(state, action) {
 
 class Lux {
   constructor(initialState) {
-    this.applicatives = [loader]
+    this.processors = [loader]
     this.effectors = []
     this.actions = bus()
 
-    let merged = this.actions.scan(processAction(this.applicatives),
+    let merged = this.actions.scan(processAction(this.processors),
                                    {state: initialState}),
         s = split(merged, ['state', 'effects'])
 
@@ -70,7 +70,7 @@ class Lux {
   }
 
   register(app) {
-    this.applicatives.push(app)
+    this.processors.push(app)
   }
 
   load(state) {

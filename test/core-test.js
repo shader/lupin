@@ -6,10 +6,10 @@ import bus from '../src/bus'
 core = rewire('../src/lux')
 
 describe('Lux', function() {
-  it('should be able to register applicatives', function() {
+  it('should be able to register processors', function() {
     let c = new Lux({a:1}),
         f = function (state, action) { return {state} }
-    expect(() => c.register(f)).to.increase(c.applicatives, 'length')
+    expect(() => c.register(f)).to.increase(c.processors, 'length')
   })
 
   it('should be able to process actions', function(done) {
