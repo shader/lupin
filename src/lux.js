@@ -7,7 +7,7 @@ Core:
   action-bus: pluggable stream of actions / events
   side-stream: stream of side-effects
 
-Processor: (state, action) -> {state, effects}
+Processor: (state, action) -> [state, effects]
 Actor: () -> actions
 Detector: event -> actions
 Effector: effect -> [Promise(action)]
@@ -19,16 +19,13 @@ function collect(acc, more) {
 }
 
 function processAction(processors) {
-  return function({state}, action) {
+  return function([state], action) {
     let reduction = processors.reduce(
-      (acc, app) => {
-        let {state, effects} = app(acc.state, action),
-            res = {
-              state,
-              effects: collect(acc.effects, effects)
-            }
+      ([state, effects], app) => {
+        let [s, e] = app(state, action),
+            res = [ s, collect(effects, e) ]
         return res
-      }, {state})
+      }, [state])
     return reduction
   }
 }
@@ -43,9 +40,9 @@ function processEffect(effect, effectors) {
 
 function loader(state, action) {
   if (action.type == 'lux.load') {
-    return {state: action.state}
+    return [action.state]
   }
-  return {state}
+  return [state]
 }
 
 class Lux {
@@ -55,11 +52,11 @@ class Lux {
     this.actions = bus()
 
     let merged = this.actions.scan(processAction(this.processors),
-                                   {state: initialState}),
-        s = split(merged, ['state', 'effects'])
+                                   [initialState]),
+        [state, effects] = split(merged)
 
-    this.state = s.state
-    this.effects = s.effects
+    this.state = state
+    this.effects = effects
       .filter(e => e !== undefined)
       .chain(l => stream.from(l))
       .multicast()

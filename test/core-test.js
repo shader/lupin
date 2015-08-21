@@ -8,14 +8,14 @@ core = rewire('../src/lux')
 describe('Lux', function() {
   it('should be able to register processors', function() {
     let c = new Lux({a:1}),
-        f = function (state, action) { return {state} }
+        f = function (state, action) { return [state] }
     expect(() => c.register(f)).to.increase(c.processors, 'length')
   })
 
   it('should be able to process actions', function(done) {
     let c = new Lux({a: 1}),
         f = function (state, action) {
-          return {state: {a: action.a}}
+          return [{a: action.a}]
         }
     c.register(f)
     c.state.slice(1,2).observe((o) => {
@@ -31,8 +31,8 @@ describe('Lux', function() {
     let c = new Lux({}), 
         f = function(state, action) {
           if (action.type == 'run')
-            return {state, effects: ['ran ' + action.val]}
-          else return {state: 'action: ' + action}
+            return [state, ['ran ' + action.val]]
+          else return ['action: ' + action]
         }
     c.register(f)
     c.effectors.unshift((e) => [e])
@@ -88,14 +88,14 @@ describe('switch', function() {
 describe('processAction', function() {
   it('should reduce (state, action) -> {state, effects}', function() {
     let r = core.__get__('processAction')([
-      (state, action) => ({state, effects: [action]}),
-      (state, action) => ({state: {action}, effects: [action[0]]})
+      (state, action) => ([state, [action]]),
+      (state, action) => ([{action}, [action[0]]])
     ]),
         state = {b:1},
         action = 'test',
-        result = r({state}, action)
-    expect(result).to.have.deep.property('state.action').that.equals('test')
-    expect(result).to.have.property('effects').that.eqls(['test', 't'])
+        [s, e] = r([state], action)
+    expect(s).to.have.property('action').that.equals('test')
+    expect(e).to.eql(['test', 't'])
   })
 })
 
