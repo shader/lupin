@@ -39,13 +39,13 @@ function processEffect(effect, effectors) {
 }
 
 function loader(state, signal) {
-  if (signal.type == 'lux.load') {
+  if (signal.type == 'lupin.load') {
     return [signal.state]
   }
   return [state]
 }
 
-function Lux(initialState) {
+function Lupin(initialState) {
   let processors = [loader],
       effectors = [],
       signals = bus(),
@@ -53,7 +53,7 @@ function Lux(initialState) {
                             [initialState]),
       [state, effects] = split(merged),
 
-      lux = {
+      lupin = {
         processors, signals, state, effectors,
         effects: effects
           .filter(e => e !== undefined)
@@ -65,15 +65,15 @@ function Lux(initialState) {
         },
 
         load(state) {
-          this.signals.push({type: 'lux.load', state})
+          this.signals.push({type: 'lupin.load', state})
         }
       },
-      processedEffects = lux.effects
+      processedEffects = lupin.effects
       .chain(e => processEffect(e, effectors))
 
-  lux.signals.plug(processedEffects)
-  return lux
+  lupin.signals.plug(processedEffects)
+  return lupin
 }
 
-export default Lux
-export {Lux, stream}
+export default Lupin
+export {Lupin, stream}

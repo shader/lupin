@@ -1,6 +1,6 @@
-import {Lux, stream} from 'lux'
+import {Lupin, stream} from 'lupin'
 
-let core = Lux({})
+let core = Lupin({})
 
 function processGreeting(state, signal) {
   if (signal.type == 'greet') {
