@@ -7,13 +7,13 @@ core = rewire('../src/lux')
 
 describe('Lux', function() {
   it('should be able to register processors', function() {
-    let c = new Lux({a:1}),
+    let c = Lux({a:1}),
         f = function (state, signal) { return [state] }
     expect(() => c.register(f)).to.increase(c.processors, 'length')
   })
 
   it('should be able to process signals', function(done) {
-    let c = new Lux({a: 1}),
+    let c = Lux({a: 1}),
         f = function (state, signal) {
           return [{a: signal.a}]
         }
@@ -28,7 +28,7 @@ describe('Lux', function() {
   })
 
   it('should be able to handle side-effects', function(done) {
-    let c = new Lux({}), 
+    let c = Lux({}),
         f = function(state, signal) {
           if (signal.type == 'run')
             return [state, ['ran ' + signal.val]]
@@ -45,7 +45,7 @@ describe('Lux', function() {
   })
 
   it('should be able to load state', function(done) {
-    let c = new Lux({}),
+    let c = Lux({}),
         trace = []
     c.state
       .take(4)

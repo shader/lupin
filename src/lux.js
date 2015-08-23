@@ -45,34 +45,34 @@ function loader(state, signal) {
   return [state]
 }
 
-class Lux {
-  constructor(initialState) {
-    this.processors = [loader]
-    this.effectors = []
-    this.signals = bus()
+function Lux(initialState) {
+  let processors = [loader],
+      effectors = [],
+      signals = bus(),
+      merged = signals.scan(processSignal(processors),
+                            [initialState]),
+      [state, effects] = split(merged),
 
-    let merged = this.signals.scan(processSignal(this.processors),
-                                   [initialState]),
-        [state, effects] = split(merged)
+      lux = {
+        processors, signals, state, effectors,
+        effects: effects
+          .filter(e => e !== undefined)
+          .chain(l => stream.from(l))
+          .multicast(),
 
-    this.state = state
-    this.effects = effects
-      .filter(e => e !== undefined)
-      .chain(l => stream.from(l))
-      .multicast()
-    
-    let processedEffects = this.effects
-        .chain(e => processEffect(e, this.effectors))
-    this.signals.plug(processedEffects)
-  }
+        register(app) {
+          this.processors.push(app)
+        },
 
-  register(app) {
-    this.processors.push(app)
-  }
+        load(state) {
+          this.signals.push({type: 'lux.load', state})
+        }
+      },
+      processedEffects = lux.effects
+      .chain(e => processEffect(e, effectors))
 
-  load(state) {
-    this.signals.push({type: 'lux.load', state})
-  }
+  lux.signals.plug(processedEffects)
+  return lux
 }
 
 export default Lux
