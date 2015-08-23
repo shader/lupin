@@ -1,4 +1,4 @@
-import {Lux, stream} from 'app/lux'
+import {Lux, stream} from 'lux'
 
 let core = Lux({})
 

@@ -1,24 +1,10 @@
 System.config({
   "transpiler": "babel",
-  "babelOptions": {
-    "optional": [
-      "runtime"
-    ]
-  },
   "paths": {
     "*": "*.js",
-    "github:*": "jspm/github/*.js",
-    "npm:*": "jspm/npm/*.js",
-    "github:cujojs/most@0.15.0": "jspm/github/cujojs/most@0.15.0/dist/most.min.js"
-  }
-});
-
-System.config({
-  "meta": {
-    "alloy-editor": {
-      "format": "global",
-      "exports": "AlloyEditor"
-    }
+    "github:*": "/jspm/github/*.js",
+    "npm:*": "/jspm/npm/*.js",
+    "github:cujojs/most@0.15.0": "/jspm/github/cujojs/most@0.15.0/dist/most.min.js"
   }
 });
 
@@ -28,10 +14,7 @@ System.config({
     "babel-runtime": "npm:babel-runtime@5.8.20",
     "core-js": "npm:core-js@0.9.18",
     "immutable": "npm:immutable@3.7.4",
-    "lipsum": "github:andrienko/lipsum-js@master",
-    "lodash/lodash": "github:lodash/lodash@3.10.1",
     "most": "github:cujojs/most@0.15.0",
-    "pen": "github:sofish/pen@0.2.2",
     "github:jspm/nodelibs-process@0.1.1": {
       "process": "npm:process@0.10.1"
     },
