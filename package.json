@@ -1,11 +1,11 @@
 {
-  "name": "lux",
+  "name": "lupin",
   "version": "0.0.0",
-  "description": "The light flux framework",
+  "description": "The light flux implementation",
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shader/lux"
+    "url": "https://github.com/shader/lupin"
   },
   "devDependencies": {
     "babel": "^5.8.21",

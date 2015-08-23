@@ -1,11 +1,11 @@
 {
-  "name": "lux-examples",
+  "name": "lupin-examples",
   "version": "0.0.0",
-  "description": "Examples for the light flux framework",
+  "description": "Examples for the lupin flux framework",
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shader/lux"
+    "url": "https://github.com/shader/lupin"
   },
   "jspm": {
     "directories": {
