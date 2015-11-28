@@ -1,3 +1,5 @@
+// bus - lupin bus module wraps most library for event pub/sub support
+
 import most from 'most'
 
 var setImmediate;

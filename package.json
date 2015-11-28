@@ -11,7 +11,8 @@
     "most": "*"
   },
   "devDependencies": {
-    "babel": "^5.8.21",
+    "babel": "^6",
+    "babel-cli": "^6",
     "chai": "^3.2.0",
     "del": "*",
     "gulp": "*",
@@ -23,8 +24,7 @@
     "gulp-standard": "^5.1.0",
     "gulp-uglify": "*",
     "mocha": "^2.2.5",
-    "mocha-babel": "^3.0.0",
-    "most-bus": "0.0.3"
+    "mocha-babel": "^3.0.0"
   },
   "scripts": {
     "prepublish": "node_modules/gulp/bin/gulp.js",
