@@ -1,3 +1,5 @@
+//  split - lupin module for dividing streams
+
 import stream from 'most'
 
 //Split stream of arrays into an array of streams, or a map of streams
@@ -7,7 +9,10 @@ export default function split(stream, fields=2) {
   if (typeof fields == 'number') {
     for (var i=0; i<fields; i++) {
       let j = i
-      streams.push(s.filter(l => l.length > j).map(o => o[j]))
+      streams.push(s.filter(
+          l => 
+             l.length > j
+        ).map(o => o[j]))
     }
   } else {
     streams = {}
