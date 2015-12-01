@@ -5,7 +5,10 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shader/lupin"
+    "url": "git+https://github.com/shader/lupin.git"
+  },
+  "dependencies": {
+    "most": "*"
   },
   "devDependencies": {
     "babel": "^5.8.21",
@@ -29,5 +32,32 @@
   },
   "standard": {
     "parser": "babel-eslint"
-  }
+  },
+  "gitHead": "af3f3b1f9995a9bf17265ec63752447a8eaf2e4b",
+  "bugs": {
+    "url": "https://github.com/shader/lupin/issues"
+  },
+  "homepage": "https://github.com/shader/lupin#readme",
+  "_id": "lupin@0.0.0",
+  "_shasum": "9f146cb5e584912e7f0bb8a9985fa36846eda895",
+  "_from": "lupin@*",
+  "_npmVersion": "2.13.3",
+  "_nodeVersion": "3.0.0",
+  "_npmUser": {
+    "name": "shader",
+    "email": "emailium@gmail.com"
+  },
+  "dist": {
+    "shasum": "9f146cb5e584912e7f0bb8a9985fa36846eda895",
+    "tarball": "http://registry.npmjs.org/lupin/-/lupin-0.0.0.tgz"
+  },
+  "main": "src/lupin.js",
+  "maintainers": [
+    {
+      "name": "shader",
+      "email": "emailium@gmail.com"
+    }
+  ],
+  "directories": {},
+  "_resolved": "https://registry.npmjs.org/lupin/-/lupin-0.0.0.tgz"
 }
