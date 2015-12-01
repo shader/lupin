@@ -81,7 +81,7 @@ function fetchProcessors( // find all of the processors subscribed to the event;
 
 function processSignal(processorTree) {
   return function([state], signal) {
-    var procs = fetchProcessors( processorTree, signal._type);
+    var procs = fetchProcessors( processorTree, signal._ctrl.type);
     return procs.reduce(
       ([state, effects], proc) => {
         let [s, e] = proc(state, signal),
@@ -92,7 +92,7 @@ function processSignal(processorTree) {
 }
 
 // convenience function for running a state or command tree to find the specific object
-// this is intended to be bound as _get to the root of the object tree
+// this is intended to be bound as getIn to the root of the object tree
 function getFunction( name) {  // name is the string or array form of the path "lupin.init" or ["lupin","init"]
   var path = ( typeof name === 'string') ? name.split('.') : name; // convert to array form if requie
   var node = this; // start at the current top
@@ -115,19 +115,38 @@ function processEffect(effect, effectors) {
 }
 
 
+// convenience function to create a source object. Really just documentation of possible attribute names
+function source(
+    type, // one of "user", "message", "antecedent", "bootstrap"    
+    module, // message interface subsystem or user facing module name
+    label, // additional identifiers such as connection or UI control
+    antecedent, // used for internally raised events to capture the prior signal source 
+    timestamp  // set by the invoke call to the current date.now()
+  ) {
+  return { type, module, label, antecedent, timestamp }
+}
+
+// convert the path ["lupin","init"] to "lupin.init"
+function pathString ( path) { 
+  var label="";
+  for (name in path) {
+    label = label+"."+name
+  }
+  return label
+}
 
 function loadState(state, signal) {
   return [signal.state]
 }
 
 function Lupin(initialState) {
-  let cmdProcessors = {_processors: [], _get: getFunction},  // see description of COMMAND PROCESSING above
+  let cmdProcessors = {_processors: [], getIn: getFunction},  // see description of COMMAND PROCESSING above
       effectors = [],
       signals = bus(),
       merged = signals.scan(processSignal(cmdProcessors),
                             [initialState]),
       [state, effects] = split(merged),
-      observers = { _stream: state }, // observer tree is similar to the processor tree but 
+      observers = { _stream: state, getIn: getFunction }, // observer tree is similar to the processor tree but 
                                 // holding filtered streams instead of proc pointers
 
       lupin = {
@@ -139,7 +158,11 @@ function Lupin(initialState) {
 
 
         load(state) {
-          this.invoke({ _type: 'lupin.load', state: state})
+          src = { 
+            type:"bootstrap", 
+            module: "lupin"
+          }
+          this.invoke( {_ctrl: { type: 'lupin.load', source: src}, state: state})
         },
 
         // construct a method to invoke a new command
@@ -160,30 +183,36 @@ function Lupin(initialState) {
           
           // define the command generation function and return it
           return ( ...args ) => {
-            var signal = { _type: path };
+            var signal = { _ctrl: {type: path}};
 
             // pump the arguments into the signal object
-
+            if( paramList.length < args.length-1)
+              throw { file: "lupin", line: 175, message: "Too many parameters for command", path, args}
             for ( var i=0; i < paramList.length && i < args.length; i++) {
               signal[paramList[i]]=args[i];
             }
+
             // call for the command
-            this.invoke( signal)
+            this.invoke( signal, args[ args.length-1])  // the source is the last argument
           }
         },
 
         invoke(  // interface to issue a command for processing
-          cmd) // command signal object including command:_type and parameters
+          cmd, // command signal object including command:_type and parameters
+          source)  // source trace object
         {
           // validate command object a wee bit
-          if( ('_type' in cmd) && ('length' in cmd._type) && cmd._type.length > 0 ) {
+          if( ('_ctrl' in cmd) && cmd._ctrl.type.length > 0 ) {
             // convert the path from "lupin.init" to ["lupin","init"] form if required
-            if( typeof cmd._type === 'string') {
-              cmd._type = cmd._type.split('.'); 
+            if( typeof cmd._ctrl.type === 'string') {
+              cmd._ctrl.type = cmd._ctrl.type.split('.'); 
             }
           } else {
-              throw { file: "lupin", line: 156, message: "Invalid command object at invoke." }
+              throw { file: "lupin", line: 196, message: "Invalid command object at invoke." }
           } 
+
+          cmd._ctrl.source = source;
+          cmd._ctrl.source.timestamp = Date.now();
           // actual most call to emmit the command to the stream
           this.signals.push( cmd);  
         },
