@@ -40,18 +40,71 @@ command subscriptions are kept in an object tree which might look like this:
 */
 
 
+// function for getting a value in the command, observer, or log control trees
+function GetNode( 
+    path)  //  path = ["lupin","init"] form
+{
+  if( labels.length) {
+    name = label[ 0]
+    if (! ( name in this)) return null
+    return this[name].getIn(labels.slice(1));
+  }
+  // stepped down as far as the provided list, Return it.
+  return this
+} 
+
+// fetch the values of the entire path (top to bottom) as an array
+function GetValues( 
+    path, //  path = ["lupin","init"] form
+    getter, // method to fetch the value of a specific node
+    result) // array to hold the result
+{
+  if ( result === undefined ) {
+    result = getter( this) 
+  } else {
+    result = result.concat( getter (this))
+  }
+  if( !path.length) return result // stepped down as far as the provided list, Return it.
+  name = path[ 0]
+  if (! ( name in this)) return result
+  return this[name].getValues(path.slice(1), getter, result);
+} 
+
+// set a value in the command, observer, or log control trees
+function SetNode( 
+  path,  // path = ['lupin', 'init'] form
+  value) // value passed to update to set the content of the node
+{
+  if (!path.length) return this.update( value) // at the resquested node, set the value
+  name = path[ 0]  // save the current label
+  if( !(name in this))  // does this object have the subtree requested?
+    this[name] = this.commandNode( ) // no, so create it
+  return this[name].setIn( path.slice(1), value)  // navigate down a layer and repeat
+} 
+
+function CommandNode( ) {// factory for a commandTree node
+  return {
+    processors: [],
+    getIn: GetNode,
+    setIn: SetNode,
+    getValues: GetValues,
+    commandNode: CommandNode,
+    update: function( proc) { this.processors.push( proc); return this }
+  }
+}
+/*
 // subscribe this processor to the command set
 function addProcessor( 
     procTree,  // the tree of subscribed processors 
     path, // an array of the labels in the signal type
-    proc) {  // function to subscribe as the processor
-  // private function to subcribe the processor to the command
+    proc) // function to subscribe as the processor
+{
   var cmdNode = procTree; 
   for (var depth = 0; depth < path.length; depth++) {
     // march through the command type path
     if( !(path[ depth] in cmdNode)) {
       // missing next layer of subscribers, add it
-      cmdNode[ path[ depth]] = {_processors: [], _get: getFunction};
+      cmdNode[ path[ depth]] = {_processors: []};
     }
     cmdNode = cmdNode[ path [depth]]  // step down to the next level
   }
@@ -78,10 +131,11 @@ function fetchProcessors( // find all of the processors subscribed to the event;
   }
   return procs;
 }
-
+*/
 function processSignal(processorTree) {
   return function([state], signal) {
-    var procs = fetchProcessors( processorTree, signal._ctrl.type);
+//    var procs = fetchProcessors( processorTree, signal._ctrl.type);
+    var procs = processorTree.getValues( signal._ctrl.type, (node) => node.processors )
     return procs.reduce(
       ([state, effects], proc) => {
         let [s, e] = proc(state, signal),
@@ -91,19 +145,7 @@ function processSignal(processorTree) {
   }
 }
 
-// convenience function for running a state or command tree to find the specific object
-// this is intended to be bound as getIn to the root of the object tree
-function getFunction( name) {  // name is the string or array form of the path "lupin.init" or ["lupin","init"]
-  var path = ( typeof name === 'string') ? name.split('.') : name; // convert to array form if requie
-  var node = this; // start at the current top
-  for ( var idx =0; idx< path.length; idx++){
-    // step down the path  - should I check to be sure it is there? 
-    // No. Not sure when you use it, use try + catch
-    node = node[path[idx]];
-  }
-  // stepped down as far as the provided list, Return it.
-  return node
-}
+
 
 
 function processEffect(effect, effectors) {
@@ -142,7 +184,7 @@ var LupinCore
 function Lupin(initialState) {
   if( LupinCore !== undefined ) return LupinCore;
 
-  let cmdProcessors = {_processors: [], getIn: getFunction},  // see description of COMMAND PROCESSING above
+  let cmdProcessors = CommandNode( ),
       effectors = [],
       signals = bus(),
       merged = signals.scan(processSignal(cmdProcessors),
@@ -151,7 +193,7 @@ function Lupin(initialState) {
       logStream = signals.filter( (signal) => { 
         return ( signal._ctrl.type[0]=='lupin' && signal._ctrl.type[1]=='log' )
       }),
-      observers = { _stream: state, getIn: getFunction }, // observer tree is similar to the processor tree but 
+      observers = { _stream: state }, // observer tree is similar to the processor tree but 
                                 // holding filtered streams instead of proc pointers
       LupinCore = {
         cmdProcessors, signals, state, effectors, logStream, observers,
@@ -184,7 +226,8 @@ function Lupin(initialState) {
           var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
           // subscribe the processor to this command
-          addProcessor(this.cmdProcessors, path, processor);
+//          addProcessor(this.cmdProcessors, path, processor);
+          cmdProcessors.setIn( path, processor);
           
           // define the command generation function and return it
           return ( parameters, source ) => {
