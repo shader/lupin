@@ -114,43 +114,47 @@ function processEffect(effect, effectors) {
     .await()
 }
 
-
 // convenience function to create a source object. Really just documentation of possible attribute names
-function source(
+function eventSource(
     type, // one of "user", "message", "antecedent", "bootstrap"    
     module, // message interface subsystem or user facing module name
-    label, // additional identifiers such as connection or UI control
-    antecedent, // used for internally raised events to capture the prior signal source 
+    label, // optional - additional identifiers such as connection or UI control
+    file, // optional - file name of the generating source code
+    line, // optional - line numbe rin the source file
+    antecedent, // optional, used for internally raised events to capture the prior signal source 
     timestamp  // set by the invoke call to the current date.now()
   ) {
-  return { type, module, label, antecedent, timestamp }
+  return { type, module, label, sourcefile, linenumber, antecedent, timestamp }
 }
 
 // convert the path ["lupin","init"] to "lupin.init"
 function pathString ( path) { 
-  var label="";
-  for (name in path) {
-    label = label+"."+name
-  }
-  return label
+ return path.join('.')
 }
 
 function loadState(state, signal) {
   return [signal.state]
 }
 
+var LupinCore
+
+
 function Lupin(initialState) {
+  if( LupinCore !== undefined ) return LupinCore;
+
   let cmdProcessors = {_processors: [], getIn: getFunction},  // see description of COMMAND PROCESSING above
       effectors = [],
       signals = bus(),
       merged = signals.scan(processSignal(cmdProcessors),
                             [initialState]),
       [state, effects] = split(merged),
+      logStream = signals.filter( (signal) => { 
+        return ( signal._ctrl.type[0]=='lupin' && signal._ctrl.type[1]=='log' )
+      }),
       observers = { _stream: state, getIn: getFunction }, // observer tree is similar to the processor tree but 
                                 // holding filtered streams instead of proc pointers
-
-      lupin = {
-        cmdProcessors, signals, state, effectors, observers,
+      LupinCore = {
+        cmdProcessors, signals, state, effectors, logStream, observers,
         effects: effects
           .filter(e => e !== undefined)
           .chain(l => stream.from(l))
@@ -158,11 +162,13 @@ function Lupin(initialState) {
 
 
         load(state) {
-          src = { 
+          source = { 
             type:"bootstrap", 
-            module: "lupin"
+            module: "lupin",
+            file: "lupin.js",
+            line: 170
           }
-          this.invoke( {_ctrl: { type: 'lupin.load', source: src}, state: state})
+          this.invoke( {_ctrl: { type: 'lupin.load', source}, state})
         },
 
         // construct a method to invoke a new command
@@ -170,11 +176,10 @@ function Lupin(initialState) {
           cmdPath, // full pathname of the command which this function will invoke
                     // can be either a string delimited with '.' or an array of strings
                     //  e.g.: "lupin.init" or ["lupin", "init"]
-          processor, // function to be invoked to execute on the subscribed command set
+          processor) // function to be invoked to execute on the subscribed command set
                      // this function must fit the signature 
                      // processor( state, command) -> [ state, effect, ...]]
-          ...paramList) // array of parameter names for this command
-        {
+         {
 
           var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
@@ -182,18 +187,16 @@ function Lupin(initialState) {
           addProcessor(this.cmdProcessors, path, processor);
           
           // define the command generation function and return it
-          return ( ...args ) => {
-            var signal = { _ctrl: {type: path}};
-
-            // pump the arguments into the signal object
-            if( paramList.length < args.length-1)
-              throw { file: "lupin", line: 175, message: "Too many parameters for command", path, args}
-            for ( var i=0; i < paramList.length && i < args.length; i++) {
-              signal[paramList[i]]=args[i];
+          return ( parameters, source ) => {
+            var signal
+            if ( arguments.length > 1) {
+              signal = Object.assign( { _ctrl: {type: path, source } }, parameters);
+            } else {
+              signal = Object.assign({ _ctrl: {type: path } }, parameters);
             }
 
             // call for the command
-            this.invoke( signal, args[ args.length-1])  // the source is the last argument
+            this.invoke( signal)  // the source is the last argument
           }
         },
 
@@ -208,10 +211,14 @@ function Lupin(initialState) {
               cmd._ctrl.type = cmd._ctrl.type.split('.'); 
             }
           } else {
-              throw { file: "lupin", line: 196, message: "Invalid command object at invoke." }
+              throw { file: "lupin", line: 213, message: "Invalid command object at invoke." }
           } 
 
-          cmd._ctrl.source = source;
+          if( arguments.length > 1) {
+            cmd._ctrl.source = source;
+          } else if (cmd._ctrl.source === undefined ) {
+            cmd._ctrl.source = {};
+          }
           cmd._ctrl.source.timestamp = Date.now();
           // actual most call to emmit the command to the stream
           this.signals.push( cmd);  
@@ -231,10 +238,8 @@ function Lupin(initialState) {
               // missing next layer of subscribers
 
               // create a stream for it      
-              var pathArray = path.slice(0,depth+1); // compute a path name to filter for
-
               var newStream = stateNode._stream
-                .map( ( state )=> state.get( name))
+                .map( ( state )=> state.get( name))  // invoke immutable get to find name member
                 .skipRepeats() 
                 .multicast()
               // create the next level node and insert our new stream
@@ -244,14 +249,44 @@ function Lupin(initialState) {
           }
           // add this proc at this level
           stateNode._stream.observe( observer)
+        },
+
+        // logs are just signals in the name space 'lupin.log.[debug, error, status].level'
+        log( // generate a log
+          mode, // one of "debug", "status", or "error"
+          level, // a positive integer, 0 < level < 6
+          source,
+              /* source = {
+                module, // message interface subsystem or user facing module name
+                file, // optional - file name of the generating source code
+                line, // optional - line numbe rin the source file
+                antecedent, // internally raised events capture the prior signal source 
+                timestamp  // set by the invoke call to the current date.now()
+              } */
+          ...args)  // anything console.log will take
+        {
+          this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode, level], source}, parameters: args})
+        },
+
+        debugSet(  // define the command messages which will be pushed to the log stream
+          cmdpath, // command path to filter
+          level)  // debug level for these logs
+        {
+
+        },
+
+        debugClear(  // discontinue logging command messages 
+          cmdPath )   // for the path specified
+        {
+
         }
       },
 
-      processedEffects = lupin.effects.chain(e => processEffect(e, effectors))
+      processedEffects = LupinCore.effects.chain(e => processEffect(e, effectors))
 
-  lupin.signals.plug(processedEffects)
-  lupin.command('lupin.load', loadState, "state")
-  return lupin;
+  LupinCore.signals.plug(processedEffects)
+  LupinCore.command('lupin.load', loadState)
+  return LupinCore;
 }
 
 export default Lupin
