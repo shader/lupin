@@ -28,14 +28,20 @@ function collect(acc, more) {
 command subscriptions are kept in an object tree which might look like this:
 
 {
-  _processors: [...],
-  lupin: {
-    _processors: [...],
-    init: {
-      _processors: [...],
-    }
-  },
-  todo:...
+  label: "_top",
+  processors: [...],
+  children: [
+    lupin: {
+      label: "lupin",
+      processors: [...],
+      children: [
+        init: {
+          label: "init",
+          processors: [...]
+        }
+      ]
+    },
+    todo:...
 }
 */
 
@@ -98,7 +104,7 @@ function CommandNode( // factory for a commandTree node
   }
 }
 
-function ObserverNode( // factory for a commandTree node
+function ObserverNode( // factory for a observerTree node
     label,  // portion of the path
     parent) // preceding node in the tree (to access preceding stream
 {
@@ -117,6 +123,7 @@ function ObserverNode( // factory for a commandTree node
     set: function( proc) { this.stream.observe( proc); return this }
   }
 }
+
 
 function debugCommandNode( // factory for a node controlling debug logging of command messages
     label,  // portion of the path
@@ -195,6 +202,19 @@ function loadState(state, signal) {
   return [signal.state]
 }
 
+// create persistent log stream set from overall signal stream
+// Lupin.log. [debug, status,error]
+function loadLogStreams( signals) {
+  return {
+    debug: signals.filter((signal) => 
+      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'debug' )).multicast(),
+    status: signals.filter((signal) => 
+      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'status' )).multicast(),
+    error: signals.filter((signal) => 
+      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'error' )).multicast()
+  }
+}
+
 var LupinCore
 
 
@@ -207,9 +227,7 @@ function Lupin(initialState) {
       merged = signals.scan(processSignal(cmdProcessors),
                             [initialState]),
       [state, effects] = split(merged),
-      logStream = signals.filter( (signal) => { 
-        return ( signal._ctrl.type[0]=='lupin' && signal._ctrl.type[1]=='log' )
-      }),
+      logStream = loadLogStreams(),
       observers = ObserverNode( "_top"), // observer tree is similar to the processor tree but 
                                         // holding filtered streams instead of proc pointers
       debugLogControl = debugCommandNode( "_top"),
@@ -241,7 +259,7 @@ function Lupin(initialState) {
                      // this function must fit the signature 
                      // processor( state, command) -> [ state, effect, ...]]
         {
-
+          // convert the path from "lupin.init" to ["lupin","init"] if required
           var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
            // subscribe the processor to this command
@@ -289,6 +307,7 @@ function Lupin(initialState) {
           statePath,  // path selecting sub tree of the state for observation
           observer   // function observer( stateSubtree)  return value is ignored
         ) {
+          // convert the path from "lupin.init" to ["lupin","init"] if required
           var path = (typeof statePath === 'string') ? statePath.split('.') : statePath;
 
           observers.setIn( path, observer)
@@ -315,23 +334,33 @@ function Lupin(initialState) {
           cmdpath, // command path to filter
           level)  // debug level for these logs
         {
+          // convert the path from "lupin.init" to ["lupin","init"] if required
           var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
-          debugLogControl.setIn( path, level)
+          this.debugLogControl.setIn( path, level)
         },
 
         debugClear(  // discontinue logging command messages 
           cmdPath )   // for the path specified
         {
+          // convert the path from "lupin.init" to ["lupin","init"] if required
           var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
-          var node = debugLogControl.getIn( path);
+          var node = this.debugLogControl.getIn( path);
           if( node.debugLevel < node.minLevel) {
             for ( var child in this.children) 
               child.updateMinLevel( level)
             }
           }
-        }
+        },
+
+        // convenience function to create a log listener
+        logSubscribe(
+          logFunction, // function to subscribe e.g.: console.log.bind(console)
+          mode) // one of "debug", "status", or "error"
+        {
+          this.logStream[mode].observe( logFunction)
+        } 
       },
 
       processedEffects = LupinCore.effects.chain(e => processEffect(e, effectors))
