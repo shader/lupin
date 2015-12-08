@@ -5,6 +5,9 @@ import stream from 'most'
 import bus from './bus'
 import split from './split'
 
+import CommandNode from'./commands'
+import ObserverNode from'./observers'
+
 /*
 Core:
   signal-stream: pluggable stream of signals
@@ -22,141 +25,6 @@ function collect(acc, more) {
 }
 
 
-// COMMAND PROCESSING
-// The following attributes and functions facilitate command processing
-/*
-command subscriptions are kept in an object tree which might look like this:
-
-{
-  label: "_top",
-  processors: [...],
-  children: [
-    lupin: {
-      label: "lupin",
-      processors: [...],
-      children: [
-        init: {
-          label: "init",
-          processors: [...]
-        }
-      ]
-    },
-    todo:...
-}
-*/
-
-
-// function for getting a value in the command, observer, or log control trees
-function GetNode( 
-    path)  //  path = ["lupin","init"] form
-{
-  if( labels.length) {
-    name = label[ 0]
-    if (! ( name in this.children)) return null
-    return this.children[name].getIn(labels.slice(1));
-  }
-  // stepped down as far as the provided list, Return it.
-  return this
-} 
-
-// fetch the values of the entire path (top to bottom) as an array
-function GetValues( 
-    path, //  path = ["lupin","init"] form
-    getter, // method to fetch the value of a specific node
-    result) // array to hold the result
-{
-  if ( result === undefined ) {
-    result = getter( this) 
-  } else {
-    result = result.concat( getter (this))
-  }
-  if( !path.length) return result // stepped down as far as the provided list, Return it.
-  name = path[ 0]
-  if (! ( name in this.children)) return result
-  return this.children[name].getValues(path.slice(1), getter, result);
-} 
-
-// set a value in the command, observer, or log control trees
-function SetNode( 
-  path,  // path = ['lupin', 'init'] form
-  value) // value passed to update to set the content of the node
-{
-  if (!path.length) return this.set( value) // at the requested node, set the value
-  name = path[ 0]  // save the current label
-  if( !(name in this.children))  // does this object have the subtree requested?
-    this.children[name] = this.newNode( name, this) // no, so create it
-  return this.children[name].setIn( path.slice(1), value)  // navigate down a layer and repeat
-} 
-
-function CommandNode( // factory for a commandTree node
-    label,  // portion of the path
-    parent) // preceding node in the tree (unused)
-{
-  return {
-    processors: [],
-    label,
-    children: {},
-    getIn: GetNode,
-    setIn: SetNode,
-    getValues: GetValues,
-    newNode: CommandNode,
-    set: function( proc) { this.processors.push( proc); return this }
-  }
-}
-
-function ObserverNode( // factory for a observerTree node
-    label,  // portion of the path
-    parent) // preceding node in the tree (to access preceding stream
-{
-  var stream = (parent === undefined) ? null : parent.stream
-                .map( ( state )=> state.get( label))  // invoke immutable get to find name member
-                .skipRepeats() 
-                .multicast()
-  return {
-    stream,
-    label,
-    children: {},
-    getIn: GetNode,
-    setIn: SetNode,
-    getValues: GetValues,
-    newNode: ObserverNode,
-    set: function( proc) { this.stream.observe( proc); return this }
-  }
-}
-
-
-function debugCommandNode( // factory for a node controlling debug logging of command messages
-    label,  // portion of the path
-    parent) // preceding node in the tree (used to calculate minlevel)
-{
-  var minLevel = (parent === undefined) ? null : parent.minLevel
-  return {
-    debugLevel: null,  // debug level to use for commands at this path
-    minLevel,          // lowest level set by parent nodes   
-    label,
-    children: {},
-    getIn: GetNode,
-    setIn: SetNode,
-    getValues: GetValues,
-    newNode: debugCommandNode,
-    set: function( level) { 
-      this.debugLevel = level; 
-      if( level < this.minLevel) 
-        for (var child in this.children) {
-          child.updateMinLevel( level)
-        }
-      return this 
-    },
-    updateMinLevel: ( level) => // new minimum level value to process
-    {
-      this.minLevel = level;
-      if ( level < this.debugLevel) 
-        for ( var child in this.children) {
-          child.updateMinLevel( level)
-        }
-    }
-  }
-}
 
 function processSignal(processorTree) {
   return function([state], signal) {
@@ -206,12 +74,13 @@ function loadState(state, signal) {
 // Lupin.log. [debug, status,error]
 function loadLogStreams( signals) {
   return {
-    debug: signals.filter((signal) => 
-      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'debug' )).multicast(),
-    status: signals.filter((signal) => 
-      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'status' )).multicast(),
-    error: signals.filter((signal) => 
-      ( type[0]=='lupin' && type[1]=='log' && type[2] == 'error' )).multicast()
+    logs: signals.filter((s) => ( s._ctrl.type[0]=='lupin' && s._ctrl.type[1]=='log' )).multicast(),
+    debug: signals.filter((s) => 
+      ( s._ctrl.type[0]=='lupin' && s._ctrl.type[1]=='log' && s._ctrl.type[2] == 'debug' )).multicast(),
+    status: signals.filter((s) => 
+      ( s._ctrl.type[0]=='lupin' && s._ctrl.type[1]=='log' && s._ctrl.type[2] == 'status' )).multicast(),
+    error: signals.filter((s) => 
+      ( s._ctrl.type[0]=='lupin' && s._ctrl.type[1]=='log' && s._ctrl.type[2] == 'error' )).multicast()
   }
 }
 
@@ -227,11 +96,10 @@ function Lupin(initialState) {
       merged = signals.scan(processSignal(cmdProcessors),
                             [initialState]),
       [state, effects] = split(merged),
-      logStream = loadLogStreams(),
+      logStream = loadLogStreams( signals),
       observers = ObserverNode( "_top"), // observer tree is similar to the processor tree but 
                                         // holding filtered streams instead of proc pointers
-      debugLogControl = debugCommandNode( "_top"),
-
+     
       LupinCore = {
         cmdProcessors, signals, state, effectors, logStream, observers,
         effects: effects
@@ -316,7 +184,6 @@ function Lupin(initialState) {
         // logs are just signals in the name space 'lupin.log.[debug, error, status].level'
         log( // generate a log
           mode, // one of "debug", "status", or "error"
-          level, // a positive integer, 0 < level < 6
           source,
               /* source = {
                 module, // message interface subsystem or user facing module name
@@ -327,7 +194,7 @@ function Lupin(initialState) {
               } */
           ...args)  // anything console.log will take
         {
-          this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode, level], source}, parameters: args})
+          this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode], source}, parameters: args})
         },
 
         debugSet(  // define the command messages which will be pushed to the log stream
@@ -348,7 +215,7 @@ function Lupin(initialState) {
 
           var node = this.debugLogControl.getIn( path);
           if( node.debugLevel < node.minLevel) {
-            for ( var child in this.children) 
+            for ( var child in this.children) {
               child.updateMinLevel( level)
             }
           }
