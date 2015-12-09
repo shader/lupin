@@ -8,6 +8,9 @@ import split from './split'
 import CommandNode from'./commands'
 import ObserverNode from'./observers'
 
+
+var LupinCore
+
 /*
 Core:
   signal-stream: pluggable stream of signals
@@ -25,11 +28,13 @@ function collect(acc, more) {
 }
 
 
-
 function processSignal(processorTree) {
   return function([state], signal) {
-//    var procs = fetchProcessors( processorTree, signal._ctrl.type);
-    var procs = processorTree.getValues( signal._ctrl.type, (node) => node.processors )
+    var debug = processorTree.getValues( signal._ctrl.type, (node) => [node.value.debug] )
+      .reduce( (prev, cur) => prev || cur, false)
+    if( debug) LupinCore.log( "debug", signal._ctrl.source, signal)
+
+    var procs = processorTree.getValues( signal._ctrl.type, (node) => node.value.processors )
     return procs.reduce(
       ([state, effects], proc) => {
         let [s, e] = proc(state, signal),
@@ -38,7 +43,6 @@ function processSignal(processorTree) {
       }, [state])
   }
 }
-
 
 function processEffect(effect, effectors) {
   return stream.from(effectors)
@@ -84,8 +88,6 @@ function loadLogStreams( signals) {
   }
 }
 
-var LupinCore
-
 
 function Lupin(initialState) {
   if( LupinCore !== undefined ) return LupinCore;
@@ -97,142 +99,134 @@ function Lupin(initialState) {
                             [initialState]),
       [state, effects] = split(merged),
       logStream = loadLogStreams( signals),
-      observers = ObserverNode( "_top"), // observer tree is similar to the processor tree but 
+      observers = ObserverNode( "_top") // observer tree is similar to the processor tree but 
                                         // holding filtered streams instead of proc pointers
      
-      LupinCore = {
-        cmdProcessors, signals, state, effectors, logStream, observers,
-        effects: effects
-          .filter(e => e !== undefined)
-          .chain(l => stream.from(l))
-          .multicast(),
+  LupinCore = {
+    cmdProcessors, signals, state, effectors, logStream, observers,
+    effects: effects
+      .filter(e => e !== undefined)
+      .chain(l => stream.from(l))
+      .multicast(),
 
 
-        load(state) {
-          source = { 
-            type:"bootstrap", 
-            module: "lupin",
-            file: "lupin.js",
-            line: 170
-          }
-          this.invoke( {_ctrl: { type: 'lupin.load', source}, state})
-        },
+    load(state) {
+      source = { 
+        type:"bootstrap", 
+        module: "lupin",
+        file: "lupin.js",
+        line: 170
+      }
+      this.invoke( {_ctrl: { type: 'lupin.load', source}, state})
+    },
 
-        // construct a method to invoke a new command
-        command( // creat the command invocation function. Returns the function.
-          cmdPath, // full pathname of the command which this function will invoke
-                    // can be either a string delimited with '.' or an array of strings
-                    //  e.g.: "lupin.init" or ["lupin", "init"]
-          processor) // function to be invoked to execute on the subscribed command set
-                     // this function must fit the signature 
-                     // processor( state, command) -> [ state, effect, ...]]
-        {
-          // convert the path from "lupin.init" to ["lupin","init"] if required
-          var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
+    // construct a method to invoke a new command
+    command( // creat the command invocation function. Returns the function.
+      cmdPath, // full pathname of the command which this function will invoke
+                // can be either a string delimited with '.' or an array of strings
+                //  e.g.: "lupin.init" or ["lupin", "init"]
+      processor) // function to be invoked to execute on the subscribed command set
+                 // this function must fit the signature 
+                 // processor( state, command) -> [ state, effect, ...]]
+    {
+      // convert the path from "lupin.init" to ["lupin","init"] if required
+      var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
-           // subscribe the processor to this command
-          cmdProcessors.setIn( path, processor);
-          
-          // define the command generation function and return it
-          return ( parameters, source ) => {
-            var signal
-            if ( arguments.length > 1) {
-              signal = Object.assign( { _ctrl: {type: path, source } }, parameters);
-            } else {
-              signal = Object.assign({ _ctrl: {type: path } }, parameters);
-            }
+       // subscribe the processor to this command
+      cmdProcessors.setIn( path, (node) => { node.value.processors.push( processor); return node } );
+      
+      // define the command generation function and return it
+      return ( parameters, source ) => {
+        var signal
+        if ( arguments.length > 1) {
+          signal = Object.assign( { _ctrl: {type: path, source } }, parameters);
+        } else {
+          signal = Object.assign({ _ctrl: {type: path } }, parameters);
+        }
 
-            // call for the command
-            this.invoke( signal)  // the source is the last argument
-          }
-        },
+        // call for the command
+        this.invoke( signal)  // the source is the last argument
+      }
+    },
 
-        invoke(  // interface to issue a command for processing
-          cmd, // command signal object including command:_type and parameters
-          source)  // source trace object
-        {
-          // validate command object a wee bit
-          if( ('_ctrl' in cmd) && cmd._ctrl.type.length > 0 ) {
-            // convert the path from "lupin.init" to ["lupin","init"] form if required
-            if( typeof cmd._ctrl.type === 'string') {
-              cmd._ctrl.type = cmd._ctrl.type.split('.'); 
-            }
-          } else {
-              throw { file: "lupin", line: 213, message: "Invalid command object at invoke." }
-          } 
+    invoke(  // interface to issue a command for processing
+      cmd, // command signal object including command:_type and parameters
+      source)  // source trace object
+    {
+      // validate command object a wee bit
+      if( ('_ctrl' in cmd) && cmd._ctrl.type.length > 0 ) {
+        // convert the path from "lupin.init" to ["lupin","init"] form if required
+        if( typeof cmd._ctrl.type === 'string') {
+          cmd._ctrl.type = cmd._ctrl.type.split('.'); 
+        }
+      } else {
+          throw { file: "lupin", line: 213, message: "Invalid command object at invoke." }
+      } 
 
-          if( arguments.length > 1) {
-            cmd._ctrl.source = source;
-          } else if (cmd._ctrl.source === undefined ) {
-            cmd._ctrl.source = {};
-          }
-          cmd._ctrl.source.timestamp = Date.now();
-          // actual most call to emmit the command to the stream
-          this.signals.push( cmd);  
-        },
+      if( arguments.length > 1) {
+        cmd._ctrl.source = source;
+      } else if (cmd._ctrl.source === undefined ) {
+        cmd._ctrl.source = {};
+      }
+      cmd._ctrl.source.timestamp = Date.now();
+      // actual most call to emmit the command to the stream
+      this.signals.push( cmd);  
+    },
 
-        observe( // establish and connect a state observation stream
-          statePath,  // path selecting sub tree of the state for observation
-          observer   // function observer( stateSubtree)  return value is ignored
-        ) {
-          // convert the path from "lupin.init" to ["lupin","init"] if required
-          var path = (typeof statePath === 'string') ? statePath.split('.') : statePath;
+    observe( // establish and connect a state observation stream
+      statePath,  // path selecting sub tree of the state for observation
+      observer   // function observer( stateSubtree)  return value is ignored
+    ) {
+      // convert the path from "lupin.init" to ["lupin","init"] if required
+      var path = (typeof statePath === 'string') ? statePath.split('.') : statePath;
 
-          observers.setIn( path, observer)
-        },
+      observers.setIn( path, (node) => { node.stream.observe( observer); return node } )
+    },
 
-        // logs are just signals in the name space 'lupin.log.[debug, error, status].level'
-        log( // generate a log
-          mode, // one of "debug", "status", or "error"
-          source,
-              /* source = {
-                module, // message interface subsystem or user facing module name
-                file, // optional - file name of the generating source code
-                line, // optional - line numbe rin the source file
-                antecedent, // internally raised events capture the prior signal source 
-                timestamp  // set by the invoke call to the current date.now()
-              } */
-          ...args)  // anything console.log will take
-        {
-          this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode], source}, parameters: args})
-        },
+    // logs are just signals in the name space 'lupin.log.[debug, error, status].level'
+    log( // generate a log
+      mode, // one of "debug", "status", or "error"
+      source,
+          /* source = {
+            module, // message interface subsystem or user facing module name
+            file, // optional - file name of the generating source code
+            line, // optional - line numbe rin the source file
+            antecedent, // internally raised events capture the prior signal source 
+            timestamp  // set by the invoke call to the current date.now()
+          } */
+      ...args)  // anything console.log will take
+    {
+      this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode], source}, parameters: args})
+    },
 
-        debugSet(  // define the command messages which will be pushed to the log stream
-          cmdpath, // command path to filter
-          level)  // debug level for these logs
-        {
-          // convert the path from "lupin.init" to ["lupin","init"] if required
-          var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
+    // define the command messages which will be pushed to the log stream
+    debugSet( cmdPath) { // command path to filter into the log stream
+      // convert the path from "lupin.init" to ["lupin","init"] if required
+      var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
-          this.debugLogControl.setIn( path, level)
-        },
+      this.cmdProcessors.setIn( path, (node) => { node.value.debug = true; return node })
+    },
 
-        debugClear(  // discontinue logging command messages 
-          cmdPath )   // for the path specified
-        {
-          // convert the path from "lupin.init" to ["lupin","init"] if required
-          var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
+    // discontinue logging command messages 
+    debugClear( cmdPath ) {  // for the path specified
+      // convert the path from "lupin.init" to ["lupin","init"] if required
+      var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
 
-          var node = this.debugLogControl.getIn( path);
-          if( node.debugLevel < node.minLevel) {
-            for ( var child in this.children) {
-              child.updateMinLevel( level)
-            }
-          }
-        },
+      cmdProcessors.setIn( path, (node) => { node.value.debug = false; return node })
+    },
 
-        // convenience function to create a log listener
-        logSubscribe(
-          logFunction, // function to subscribe e.g.: console.log.bind(console)
-          mode) // one of "debug", "status", or "error"
-        {
-          this.logStream[mode].observe( logFunction)
-        } 
-      },
+    // convenience function to create a log listener
+    logSubscribe(
+      logFunction, // function to subscribe e.g.: console.log.bind(console)
+      mode) // one of "debug", "status", or "error"
+    {
+      this.logStream[mode].observe( logFunction)
+    } 
+  }
 
-      processedEffects = LupinCore.effects.chain(e => processEffect(e, effectors))
 
   LupinCore.observers.stream = LupinCore.state;
+  var processedEffects = LupinCore.effects.chain(e => processEffect(e, effectors))
   LupinCore.signals.plug(processedEffects)
   LupinCore.command('lupin.load', loadState)
   return LupinCore;
