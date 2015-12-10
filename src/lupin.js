@@ -5,11 +5,82 @@ import stream from 'most'
 import bus from './bus'
 import split from './split'
 
-import CommandNode from'./commands'
-import ObserverNode from'./observers'
+//import StackTrace from 'stacktrace-js'
+//import StackFrame from 'stackframe'
+
+import CommandNode from './commands'
+import ObserverNode from './observers'
 
 
 var LupinCore
+/*
+stack trace option 1
+
+var callback = function(stackframes) {
+  var stringifiedStack = stackframes.map(function(sf) {
+    return sf.toString();
+  }).join('\n');
+  console.log(stringifiedStack);
+};
+
+var errback = function(err) { console.log(err.message); };
+*/
+
+/*
+stack track option 2
+
+function printStackTrace() {
+  var callstack = [];
+  var isCallstackPopulated = false;
+  try {
+    i.dont.exist+=0; //doesn't exist- that's the point
+  } catch(e) {
+    if (e.stack) { //Firefox
+      var lines = e.stack.split('\n');
+      for (var i=0, len=lines.length; i<len; i++) {
+        if (lines[i].match(/^\s*[A-Za-z0-9\-_\$]+\(/)) {
+          callstack.push(lines[i]);
+        }
+      }
+      //Remove call to printStackTrace()
+      callstack.shift();
+      isCallstackPopulated = true;
+    }
+    else if (window.opera && e.message) { //Opera
+      var lines = e.message.split('\n');
+      for (var i=0, len=lines.length; i<len; i++) {
+        if (lines[i].match(/^\s*[A-Za-z0-9\-_\$]+\(/)) {
+          var entry = lines[i];
+          //Append next line also since it has the file info
+          if (lines[i+1]) {
+            entry += ' at ' + lines[i+1];
+            i++;
+          }
+          callstack.push(entry);
+        }
+      }
+      //Remove call to printStackTrace()
+      callstack.shift();
+      isCallstackPopulated = true;
+    }
+  }
+  if (!isCallstackPopulated) { //IE and Safari
+    var currentFunction = arguments.callee.caller;
+    while (currentFunction) {
+      var fn = currentFunction.toString();
+      var fname = fn.substring(fn.indexOf("function") + 8, fn.indexOf('')) || 'anonymous';
+      callstack.push(fname);
+      currentFunction = currentFunction.caller;
+    }
+  }
+  output(callstack);
+}
+
+function output(arr) {
+  //Optput however you want
+  console.log( "StackTrace:" + arr.join('\n\n'));
+}
+*/
 
 /*
 Core:
@@ -89,7 +160,8 @@ function loadLogStreams( signals) {
 }
 
 
-function Lupin(initialState) {
+
+function Lupin( initialState) {
   if( LupinCore !== undefined ) return LupinCore;
 
   let cmdProcessors = CommandNode( "_top"),
@@ -139,11 +211,13 @@ function Lupin(initialState) {
       return ( parameters, source ) => {
         var signal
         if ( arguments.length > 1) {
-          signal = Object.assign( { _ctrl: {type: path, source } }, parameters);
+          signal = { _ctrl: {type: path, source } }
         } else {
-          signal = Object.assign({ _ctrl: {type: path } }, parameters);
+          signal = { _ctrl: {type: path } }
         }
-
+        if( arguments.length) {
+          Object.getOwnPropertyNames( parameters).forEach( (key) => signal[ key] = parameters[ key] )
+        }  
         // call for the command
         this.invoke( signal)  // the source is the last argument
       }
@@ -160,8 +234,11 @@ function Lupin(initialState) {
           cmd._ctrl.type = cmd._ctrl.type.split('.'); 
         }
       } else {
-          throw { file: "lupin", line: 213, message: "Invalid command object at invoke." }
+          throw { message: "Invalid command object at invoke." }
       } 
+
+//StackTrace.get().then(callback).catch(errback)
+printStackTrace()
 
       if( arguments.length > 1) {
         cmd._ctrl.source = source;
@@ -199,7 +276,7 @@ function Lupin(initialState) {
       this.invoke( {_ctrl: { type: [ 'lupin', 'log', mode], source}, parameters: args})
     },
 
-    // define the command messages which will be pushed to the log stream
+    // define selected command messages to be copied to the log stream
     debugSet( cmdPath) { // command path to filter into the log stream
       // convert the path from "lupin.init" to ["lupin","init"] if required
       var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;
@@ -207,7 +284,7 @@ function Lupin(initialState) {
       this.cmdProcessors.setIn( path, (node) => { node.value.debug = true; return node })
     },
 
-    // discontinue logging command messages 
+    // discontinue logging selected command messages 
     debugClear( cmdPath ) {  // for the path specified
       // convert the path from "lupin.init" to ["lupin","init"] if required
       var path = (typeof cmdPath === 'string') ? cmdPath.split('.') : cmdPath;

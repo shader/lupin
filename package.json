@@ -51,7 +51,7 @@
     "shasum": "9f146cb5e584912e7f0bb8a9985fa36846eda895",
     "tarball": "http://registry.npmjs.org/lupin/-/lupin-0.0.0.tgz"
   },
-  "main": "src/lupin.js",
+  "main": "dist/lupin.js",
   "maintainers": [
     {
       "name": "shader",

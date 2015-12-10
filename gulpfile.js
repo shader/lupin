@@ -18,7 +18,7 @@ gulp.task('scripts', ['lint'], function() {
     .pipe(p.changed('dist'))
     .pipe(p.sourcemaps.init())
     .pipe(p.babel())
-    .pipe(p.uglify())
+//    .pipe(p.uglify())
     .pipe(p.sourcemaps.write('maps'))
     .pipe(gulp.dest('dist'))
 });
@@ -27,6 +27,6 @@ gulp.task('clean', function(cb) {
   del('dist/**/*', cb)
 });
 
-gulp.task('default', ['clean'], function() {
+gulp.task('default', function() {
   gulp.start('scripts');
 });
